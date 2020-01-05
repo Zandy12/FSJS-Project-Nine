@@ -80,22 +80,34 @@ router.post('/users', [
   check('password')
     .exists({ checkNull: true, checkFalsy: true })
     .withMessage('Please provide a value for "Password"'),
-], asyncHandler(async (req, res) => {
+], async (req, res) => {
     const errors = validationResult(req);
-  
+    let passwordExists = true;
+    let errorArray = new Array();
+
+    for (let i = 0; i < errors.errors.length; ++i) {
+      errorArray.push(errors.errors[i].msg);
+      if (errors.errors[i].msg === `Please provide a value for "Password"`) {
+        passwordExists = false;
+      }
+    }
+
     const user = req.body;
 
-    user.password = bcryptjs.hashSync(user.password);
+    if (passwordExists) {
+      user.password = bcryptjs.hashSync(user.password);
+    }
+
+    res.location('/');
 
     if (!errors.isEmpty()) {
-      const errorMessages = errors.array().map(error => error.msg);
-      res.status(400).json({ errors: errorMessages });
+      res.status(400).json({ errors: errorArray });
     } else {
       const newUser = await User.create(user);
       res.json(newUser);
-      return res.status(201).end();
+      res.status(201).end();
     }
-  }));
+  });
 
   /******************
  *  COURSES ROUTES
@@ -103,12 +115,8 @@ router.post('/users', [
 
   /* GET- /courses */
 
-  router.get('/courses', authenticateUser, asyncHandler(async (req, res) => {
-    const user = req.currentUser;
-    let courses = await Course.findAll({ where: {
-      userId: user.id,
-    }, raw: true });
-
+  router.get('/courses', asyncHandler(async (req, res) => {
+    let courses = await Course.findAll({ raw: true });
     res.json(courses);
   }));
 
@@ -121,7 +129,7 @@ router.post('/users', [
     check('description')
       .exists({ checkNull: true, checkFalsy: true })
       .withMessage('Please provide a value for "Description"'), 
-  ], authenticateUser, asyncHandler(async (req, res) => {
+  ], authenticateUser, async (req, res) => {
     const user = req.currentUser;
     const errors = validationResult(req);
     const course = req.body;
@@ -137,24 +145,22 @@ router.post('/users', [
         estimatedTime: course.estimatedTime,
         materialsNeeded: course.materialsNeeded,
       });
-      res.json(newCourse);
-      return res.status(201).end();
+      res.redirect(201, '/courses/' + newCourse.id);
     }
-    }));
+  });
 
   /* GET- /courses/:id */
   
-  router.get("/courses/:id", authenticateUser, asyncHandler(async (req, res) => {
+  router.get("/courses/:id", asyncHandler(async (req, res) => {
     const id = req.params.id;
-    const user = req.currentUser;
 
-    let courses = await Course.findAll({
+    let course = await Course.findAll({
       where: {
-        userId: user.id
+        id: id
       }
     }, {raw: true});
 
-    let i = 0;
+    /* let i = 0;
     while (i < courses.length) {
       if (courses[i].dataValues.id == id) {
         const course = courses[i].dataValues;
@@ -167,10 +173,9 @@ router.post('/users', [
 
     if (i === courses.length) {
       res.status(400).json({ message: 'Course not found for ' + user.firstName});
-    }
-    if (i < courses.length) {
-      res.status(204).end;
-    }
+    } */
+    res.json(course[0].dataValues);
+    res.status(200).end;
   }));
   
   /* PUT- /courses/:id */
@@ -229,17 +234,16 @@ router.post('/users', [
             }
           }, {raw: true});
           const displayCourseInfo = courseInfo[0].dataValues;
-          res.json(displayCourseInfo);
-          return res.status(201).end();
+          res.redirect(204, '/courses/' + displayCourseInfo.id);
         } else if (!courseExistsForUser) {
-          res.status(400).json({ message: 'Course not found for ' + user.firstName});
+          res.status(400).end;
         }
       }
     }));
   
   /* DELETE- /courses/:id */
 
-  router.delete('/courses/:id', authenticateUser, asyncHandler(async (req ,res) => {
+  router.delete('/courses/:id', authenticateUser, async (req ,res) => {
     const id = req.params.id;
     const user = req.currentUser;
 
@@ -257,7 +261,8 @@ router.post('/users', [
               id: id,
           }
         });
-        res.json({ message: "Course: " + courses[i].dataValues.title + " has been successfully deleted for " + user.firstName + "." });
+        //res.json({ message: "Course: " + courses[i].dataValues.title + " has been successfully deleted for " + user.firstName + "." });
+        res.json();
         break;
       } else {
         ++i;
@@ -270,6 +275,6 @@ router.post('/users', [
     if (i < courses.length) {
       res.status(204).end;
     }
-  }));  
+  });  
 
 module.exports = router;
