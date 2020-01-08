@@ -80,7 +80,7 @@ router.post('/users', [
   check('password')
     .exists({ checkNull: true, checkFalsy: true })
     .withMessage('Please provide a value for "Password"'),
-], async (req, res) => {
+], asyncHandler(async (req, res) => {
     const errors = validationResult(req);
     let passwordExists = true;
     let errorArray = new Array();
@@ -107,7 +107,7 @@ router.post('/users', [
       res.json(newUser);
       res.status(201).end();
     }
-  });
+  }));
 
   /******************
  *  COURSES ROUTES
@@ -116,8 +116,17 @@ router.post('/users', [
   /* GET- /courses */
 
   router.get('/courses', asyncHandler(async (req, res) => {
-    let courses = await Course.findAll({ raw: true });
-    res.json(courses);
+    const courses = await Course.findAll({ 
+      attributes: ['id', 'title', 'description', 'estimatedTime', 'materialsNeeded'],
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'firstName', 'lastName', 'emailAddress'],
+        },
+      ],
+     });
+    const mappedCourses = courses.map(course => course.get({ plain: true }));
+    res.json(mappedCourses);
   }));
 
   /* POST- /courses */
@@ -129,7 +138,7 @@ router.post('/users', [
     check('description')
       .exists({ checkNull: true, checkFalsy: true })
       .withMessage('Please provide a value for "Description"'), 
-  ], authenticateUser, async (req, res) => {
+  ], authenticateUser, asyncHandler(async (req, res) => {
     const user = req.currentUser;
     const errors = validationResult(req);
     const course = req.body;
@@ -147,18 +156,35 @@ router.post('/users', [
       });
       res.redirect(201, '/courses/' + newCourse.id);
     }
-  });
+  }));
 
   /* GET- /courses/:id */
   
   router.get("/courses/:id", asyncHandler(async (req, res) => {
     const id = req.params.id;
 
-    let course = await Course.findAll({
+    const course = await Course.findAll({
+      attributes: ['id', 'title', 'description', 'estimatedTime', 'materialsNeeded'],
       where: {
         id: id
-      }
+      },
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'firstName', 'lastName', 'emailAddress'],
+        },
+      ],
     }, {raw: true});
+
+    /* const courses = await Course.findAll({ 
+      include: [
+        {
+          model: User,
+        },
+      ],
+     });
+    const mappedCourses = courses.map(course => course.get({ plain: true }));
+    res.json(mappedCourses); */
 
     /* let i = 0;
     while (i < courses.length) {
@@ -243,38 +269,14 @@ router.post('/users', [
   
   /* DELETE- /courses/:id */
 
-  router.delete('/courses/:id', authenticateUser, async (req ,res) => {
-    const id = req.params.id;
-    const user = req.currentUser;
-
-    let courses = await Course.findAll({
-      where: {
-        userId: user.id
-      }
-    }, {raw: true});
-
-    let i = 0;
-    while (i < courses.length) {
-      if (courses[i].dataValues.id == id) {
-        await Course.destroy({
-          where: {
-              id: id,
-          }
-        });
-        //res.json({ message: "Course: " + courses[i].dataValues.title + " has been successfully deleted for " + user.firstName + "." });
-        res.json();
-        break;
-      } else {
-        ++i;
-      }
-    } 
-
-    if (i === courses.length) {
-      res.status(400).json({ message: 'Course not found for ' + user.firstName});
+  router.delete('/courses/:id', authenticateUser, asyncHandler(async (req ,res) => {
+    try {
+      const course = await Course.findByPk(req.params.id);       
+      await course.destroy();
+      res.status(204).end();
+    } catch (error) {
+      res.status(400).json({ message: "Course can't be found", error });
     }
-    if (i < courses.length) {
-      res.status(204).end;
-    }
-  });  
+  }));  
 
 module.exports = router;
